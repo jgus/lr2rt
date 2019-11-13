@@ -1,0 +1,10 @@
+[requires]
+#gtest/1.8.1
+zlib/1.2.11
+boost/1.71.0
+Exiv2/0.27@piponazo/stable
+
+[generators]
+cmake
+
+[options]
