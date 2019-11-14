@@ -68,6 +68,44 @@ template <typename T, typename = void>
 struct get_value_impl {};
 
 template <>
+struct get_value_impl<bool> {
+    static std::optional<bool> impl(Exiv2::Value const& x) {
+        switch (x.typeId()) {
+            case Exiv2::TypeId::xmpText: {
+                auto s = x.toString();
+                if (boost::iequals(s, "true")) return true;
+                if (boost::iequals(s, "yes")) return true;
+                if (boost::iequals(s, "on")) return true;
+                if (boost::iequals(s, "1")) return true;
+                if (boost::iequals(s, "false")) return false;
+                if (boost::iequals(s, "no")) return false;
+                if (boost::iequals(s, "off")) return false;
+                if (boost::iequals(s, "0")) return false;
+                return std::nullopt;
+            }
+            default:
+                throw std::logic_error("not implemented");
+        }
+    }
+};
+
+template <typename T>
+struct get_value_impl<T, std::enable_if_t<std::is_arithmetic_v<T>>> {
+    static std::optional<T> impl(Exiv2::Value const& x) {
+        switch (x.typeId()) {
+            case Exiv2::TypeId::xmpText: {
+                std::istringstream i{x.toString()};
+                T value;
+                i >> value;
+                return value;
+            }
+            default:
+                throw std::logic_error("not implemented");
+        }
+    }
+};
+
+template <>
 struct get_value_impl<std::string> {
     static std::optional<std::string> impl(Exiv2::Value const& x) {
         switch (x.typeId()) {
@@ -144,7 +182,7 @@ class metadata_t {
     }
 
     template <typename T>
-    std::optional<T> get(std::string const& key) const {
+    [[nodiscard]] std::optional<T> get(std::string const& key) const {
         std::optional<T> result;
         if (sidecar_) {
             auto i = sidecar_->xmpData().findKey(Exiv2::XmpKey{key});
@@ -154,11 +192,6 @@ class metadata_t {
         auto i = image_->xmpData().findKey(Exiv2::XmpKey{key});
         if (i != image_->xmpData().end()) result = get_value<T>(i->value());
         return result;
-    }
-
-    bool is_lightroom() const {
-        auto tool_name = get<std::string>("Xmp.xmp.CreatorTool");
-        return tool_name && (boost::icontains(*tool_name, "lightroom") || boost::icontains(*tool_name, "camera raw"));
     }
 
     friend std::ostream& operator<<(std::ostream& s, metadata_t const& m) {
@@ -202,7 +235,7 @@ class source_file_t {
 
 namespace detail {
 
-template <typename T>
+template <typename T, typename = void>
 struct to_setting_string_impl {};
 
 template <>
@@ -213,6 +246,15 @@ struct to_setting_string_impl<std::string> {
 template <>
 struct to_setting_string_impl<bool> {
     static auto impl(bool value) { return value ? "true"s : "false"s; }
+};
+
+template <typename T>
+struct to_setting_string_impl<T, std::enable_if_t<std::is_arithmetic_v<T>>> {
+    static auto impl(T value) {
+        std::ostringstream o;
+        o << value;
+        return o.str();
+    }
 };
 
 template <typename T>
@@ -273,6 +315,33 @@ bool import_simple(metadata_t const& metadata,
     return false;
 }
 
+template <typename TSource, typename TTarget>
+bool import_convert(metadata_t const& metadata,
+                    std::string const& xmp_key,
+                    std::function<std::optional<TTarget>(TSource)> conversion,
+                    settings_t& settings,
+                    std::string const& settting_category,
+                    std::string const& setting_key) {
+    auto source = metadata.get<TSource>(xmp_key);
+    if (source) {
+        auto target = conversion(*source);
+        if (target) {
+            settings.set(settting_category, setting_key, *target);
+            return true;
+        }
+    }
+    return false;
+}
+
+std::optional<int> convert_color_label(std::string const& x) {
+    if (boost::iequals(x, "red")) return 1;
+    if (boost::iequals(x, "yellow")) return 2;
+    if (boost::iequals(x, "green")) return 3;
+    if (boost::iequals(x, "blue")) return 4;
+    if (boost::iequals(x, "purple")) return 5;
+    return std::nullopt;
+}
+
 void import(metadata_t const& metadata, settings_t& settings) {
     import_simple<std::string>(metadata, "Xmp.dc.description", settings, "IPTC", "Caption");
     import_simple<std::string>(metadata, "Xmp.dc.rights", settings, "IPTC", "Copyright");
@@ -280,6 +349,10 @@ void import(metadata_t const& metadata, settings_t& settings) {
     import_simple<std::string>(metadata, "Xmp.dc.title", settings, "IPTC", "Title");
     if (!import_simple<std::vector<std::string>>(metadata, "Xmp.lr.hierarchicalSubject", settings, "IPTC", "Keywords"))
         import_simple<std::vector<std::string>>(metadata, "Xmp.dc.subject", settings, "IPTC", "Keywords");
+
+    import_simple<int>(metadata, "Xmp.xmp.Rating", settings, "General", "Rank");
+    import_convert<std::string, int>(
+        metadata, "Xmp.xmp.Label", &convert_color_label, settings, "General", "ColorLabel");
 
     // TODO
 }
