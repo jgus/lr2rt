@@ -42,26 +42,6 @@ auto parse_options(int argc, char* const* argv) {
     return options;
 }
 
-std::string to_string(Exiv2::TypeId x) {
-    switch (x) {
-        case Exiv2::TypeId::xmpText:
-            return "xmpText";
-        case Exiv2::TypeId::xmpAlt:
-            return "xmpAlt";
-        case Exiv2::TypeId::xmpBag:
-            return "xmpBag";
-        case Exiv2::TypeId::xmpSeq:
-            return "xmpSeq";
-        case Exiv2::TypeId::langAlt:
-            return "langAlt";
-        default: {
-            std::ostringstream s;
-            s << x;
-            return s.str();
-        }
-    }
-}
-
 namespace detail {
 
 template <typename T, typename = void>
@@ -197,14 +177,14 @@ class metadata_t {
     friend std::ostream& operator<<(std::ostream& s, metadata_t const& m) {
         s << "XMP from file:" << std::endl;
         for (auto&& datum : m.image_->xmpData()) {
-            s << datum.key() << ": " << datum.value().toString() << " (" << to_string(datum.value().typeId()) << ")"
-              << std::endl;
+            s << datum.key() << ": " << datum.value().toString() << " ("
+              << Exiv2::TypeInfo::typeName(datum.value().typeId()) << ")" << std::endl;
         }
         if (m.sidecar_) {
             s << "XMP from sidecar:" << std::endl;
             for (auto&& datum : m.sidecar_->xmpData()) {
-                s << datum.key() << ": " << datum.value().toString() << " (" << to_string(datum.value().typeId()) << ")"
-                  << std::endl;
+                s << datum.key() << ": " << datum.value().toString() << " ("
+                  << Exiv2::TypeInfo::typeName(datum.value().typeId()) << ")" << std::endl;
             }
         }
         return s;
