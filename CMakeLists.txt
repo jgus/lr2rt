@@ -35,5 +35,6 @@ target_link_libraries(lr2rt PRIVATE
         Exiv2
         )
 target_sources(lr2rt PRIVATE
+        interpolate.h
         main.cc
         )

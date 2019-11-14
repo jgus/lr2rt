@@ -10,6 +10,8 @@
 #include <optional>
 #include <utility>
 
+#include "interpolate.h"
+
 using namespace std::string_literals;
 
 struct options_t {
@@ -322,7 +324,44 @@ std::optional<int> convert_color_label(std::string const& x) {
     return std::nullopt;
 }
 
+std::optional<float> convert_tint(int x) {
+    static Interpolator const lr_tint_to_lnrg{{
+        {150, 0.4472347561f},
+        {120, 0.3614738364f},
+        {90, 0.2902822029f},
+        {60, 0.2320119442f},
+        {30, 0.1789069729f},
+        {20, 0.1613647324f},
+        {10, 0.1427758973f},
+        {0, 0.1248534423f},
+        {-10, 0.1036493101f},
+        {-20, 0.08258857431f},
+        {-30, 0.0629298779f},
+        {-60, -0.002147326005f},
+        {-90, -0.06668486396f},
+        {-120, -0.125869729f},
+        {-150, -0.1808872982f},
+    }};
+    static Interpolator const lnrg_to_rt_tint{{
+        {0.8171373437, 0.19562},   {0.7811030438, 0.21224},  {0.7450388954, 0.23028},    {0.7087309148, 0.24986},
+        {0.6720998692, 0.27110},   {0.6351289632, 0.29414},  {0.5979481717, 0.31914},    {0.5606603801, 0.34627},
+        {0.523284775, 0.37570},    {0.4858030276, 0.40764},  {0.448275121, 0.44229},     {0.4107057305, 0.47988},
+        {0.3730293203, 0.52067},   {0.3351195742, 0.56493},  {0.2970600413, 0.61295},    {0.2589332983, 0.66505},
+        {0.2207358646, 0.72157},   {0.1824888955, 0.78291},  {0.1442752227, 0.84946},    {0.1061831113, 0.92166},
+        {0.0681933581, 1.00000},   {0.03029290848, 1.08500}, {-0.007514875596, 1.17722}, {-0.04525204435, 1.27729},
+        {-0.08291626329, 1.38586}, {-0.1205209756, 1.50366}, {-0.1580656479, 1.63147},   {-0.195191121, 1.77014},
+        {-0.2319562788, 1.92060},  {-0.2683265738, 2.08386}, {-0.3042466894, 2.26098},   {-0.3397271162, 2.45317},
+        {-0.3747203568, 2.66169},  {-0.4091412238, 2.88793}, {-0.4430431349, 3.13340},   {-0.4764123107, 3.39974},
+        {-0.5092487958, 3.68872},  {-0.541583611, 4.00226},  {-0.5733997287, 4.34245},   {-0.604695869, 4.71156},
+        {-0.6354722459, 5.11205},
+    }};
+    static float const lnrg_factor = 0.0681933581 - 0.1427758973f;
+
+    return lnrg_to_rt_tint(lr_tint_to_lnrg(x) + lnrg_factor);
+}
+
 void import(metadata_t const& metadata, settings_t& settings) {
+    // IPTC Metadata
     import_simple<std::string>(metadata, "Xmp.dc.description", settings, "IPTC", "Caption");
     import_simple<std::string>(metadata, "Xmp.dc.rights", settings, "IPTC", "Copyright");
     import_simple<std::string>(metadata, "Xmp.dc.creator", settings, "IPTC", "Creator");
@@ -330,9 +369,20 @@ void import(metadata_t const& metadata, settings_t& settings) {
     if (!import_simple<std::vector<std::string>>(metadata, "Xmp.lr.hierarchicalSubject", settings, "IPTC", "Keywords"))
         import_simple<std::vector<std::string>>(metadata, "Xmp.dc.subject", settings, "IPTC", "Keywords");
 
+    // Labels
     import_simple<int>(metadata, "Xmp.xmp.Rating", settings, "General", "Rank");
     import_convert<std::string, int>(
         metadata, "Xmp.xmp.Label", &convert_color_label, settings, "General", "ColorLabel");
+
+    // White Balance
+    bool has_wb = false;
+    has_wb = import_simple<int>(metadata, "Xmp.crs.Temperature", settings, "White Balance", "Temperature") || has_wb;
+    has_wb = import_convert<int, float>(metadata, "Xmp.crs.Tint", &convert_tint, settings, "White Balance", "Green") ||
+             has_wb;
+    if (has_wb) {
+        settings.set("White Balance", "Enabled", true);
+        settings.set("White Balance", "Setting", "Custom"s);
+    }
 
     // TODO
 }
