@@ -412,6 +412,56 @@ std::optional<int> convert_saturation(int x) {
     return int(std::round(sat_to_rt(lr_to_sat(float(x)))));
 }
 
+std::optional<int> convert_higlights(int x) {
+    static Interpolator const lr_to_m{{
+        {-100, 31097.3},
+        {-80, 31555.1},
+        {-60, 31975.7},
+        {-40, 32360},
+        {0, 33023.3},
+    }};
+    static Interpolator const m_to_rt{{
+        {33023.3, 0},
+        {32539.50801, 10},
+        {32052.71843, 20},
+        {31562.93126, 30},
+        {31070.41902, 40},
+        {30575.45421, 50},
+        {30078.85436, 60},
+        {29581.52781, 70},
+        {29085.38214, 80},
+        {28662.54103, 90},
+        {28105.26279, 100},
+    }};
+
+    return int(std::round(m_to_rt(lr_to_m(float(x)))));
+}
+
+std::optional<int> convert_shadows(int x) {
+    static Interpolator const lr_to_m{{
+        {0, 33023.3},
+        {20, 34027.1},
+        {40, 35070.3},
+        {60, 36149.4},
+        {80, 37262.2},
+    }};
+    static Interpolator const m_to_rt{{
+        {33023.3, 0},
+        {34187.18037, 10},
+        {35490.22133, 20},
+        {36929.33446, 30},
+        {38492.98362, 40},
+        {40160.73071, 50},
+        {41905.68832, 60},
+        {43699.4248, 70},
+        {45515.50692, 80},
+        {47330.40817, 90},
+        {49125.41635, 100},
+    }};
+
+    return int(std::round(m_to_rt(lr_to_m(float(x)))));
+}
+
 void import(metadata_t const& metadata, settings_t& settings) {
     // IPTC Metadata
     import_simple<std::string>(metadata, "Xmp.dc.description", settings, "IPTC", "Caption");
@@ -452,6 +502,26 @@ void import(metadata_t const& metadata, settings_t& settings) {
                              "Exposure",
                              "Contrast");
     import_convert<int, int>(metadata, "Xmp.crs.Saturation", &convert_saturation, settings, "Exposure", "Saturation");
+
+    // Shadows & Highlights
+    bool has_sh = false;
+    has_sh = import_convert<int, int>(metadata,
+                                      std::vector<std::string>{"Xmp.crs.Highlights2012", "Xmp.crs.Highlights"},
+                                      &convert_higlights,
+                                      settings,
+                                      "Shadows & Highlights",
+                                      "Highlights") ||
+             has_sh;
+    has_sh = import_convert<int, int>(metadata,
+                                      std::vector<std::string>{"Xmp.crs.Shadows2012", "Xmp.crs.Shadows"},
+                                      &convert_shadows,
+                                      settings,
+                                      "Shadows & Highlights",
+                                      "Shadows") ||
+             has_sh;
+    if (has_sh) {
+        settings.set("Shadows & Highlights", "Enabled", true);
+    }
 
     // TODO
 }
