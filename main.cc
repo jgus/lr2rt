@@ -176,6 +176,24 @@ class metadata_t {
         return result;
     }
 
+    template <typename T>
+    [[nodiscard]] std::optional<T> get(std::vector<std::string> const& keys) const {
+        std::optional<T> result;
+        if (sidecar_) {
+            for (auto&& key : keys) {
+                auto i = sidecar_->xmpData().findKey(Exiv2::XmpKey{key});
+                if (i != sidecar_->xmpData().end()) result = get_value<T>(i->value());
+                if (result) return result;
+            }
+        }
+        for (auto&& key : keys) {
+            auto i = image_->xmpData().findKey(Exiv2::XmpKey{key});
+            if (i != image_->xmpData().end()) result = get_value<T>(i->value());
+            if (result) return result;
+        }
+        return std::nullopt;
+    }
+
     friend std::ostream& operator<<(std::ostream& s, metadata_t const& m) {
         s << "XMP from file:" << std::endl;
         for (auto&& datum : m.image_->xmpData()) {
@@ -283,9 +301,9 @@ class settings_t {
     std::map<std::string, std::map<std::string, std::string>> settings_;
 };
 
-template <typename T>
+template <typename T, typename TKey>
 bool import_simple(metadata_t const& metadata,
-                   std::string const& xmp_key,
+                   TKey const& xmp_key,
                    settings_t& settings,
                    std::string const& settting_category,
                    std::string const& setting_key) {
@@ -297,9 +315,9 @@ bool import_simple(metadata_t const& metadata,
     return false;
 }
 
-template <typename TSource, typename TTarget>
+template <typename TSource, typename TTarget, typename TKey>
 bool import_convert(metadata_t const& metadata,
-                    std::string const& xmp_key,
+                    TKey const& xmp_key,
                     std::function<std::optional<TTarget>(TSource)> conversion,
                     settings_t& settings,
                     std::string const& settting_category,
@@ -357,7 +375,41 @@ std::optional<float> convert_tint(int x) {
     }};
     static float const lnrg_factor = 0.0681933581 - 0.1427758973f;
 
-    return lnrg_to_rt_tint(lr_tint_to_lnrg(x) + lnrg_factor);
+    return lnrg_to_rt_tint(lr_tint_to_lnrg(float(x)) + lnrg_factor);
+}
+
+std::optional<int> convert_contrast(int x) {
+    static Interpolator const lr_to_std{{
+        {100, 0.36458},  {80, 0.353671},  {60, 0.341999},  {40, 0.329606},   {30, 0.323169},
+        {20, 0.3166},    {15, 0.313276},  {10, 0.309932},  {5, 0.306573},    {0, 0.303206},
+        {-5, 0.300125},  {-10, 0.297033}, {-15, 0.293934}, {-20, 0.290831},  {-30, 0.284629},
+        {-40, 0.278439}, {-60, 0.266103}, {-80, 0.253801}, {-100, 0.241532},
+    }};
+    static Interpolator const std_to_rt{{
+        {0.0004, -100}, {0.0267, -90}, {0.0540, -80}, {0.0823, -70}, {0.1117, -60}, {0.1425, -50}, {0.1750, -40},
+        {0.2098, -30},  {0.2477, -20}, {0.2900, -10}, {0.3400, 0},   {0.3888, 10},  {0.4420, 20},  {0.5011, 30},
+        {0.5683, 40},   {0.6454, 50},  {0.7325, 60},  {0.8280, 70},  {0.9291, 80},  {1.0282, 90},  {1.1115, 100},
+    }};
+
+    return int(std::round(std_to_rt(lr_to_std(float(x)))));
+}
+
+std::optional<int> convert_saturation(int x) {
+    static Interpolator const lr_to_sat{{
+        {100, 0.66407400}, {80, 0.63174100},  {60, 0.58658300},  {40, 0.52428900},   {30, 0.48529900},
+        {20, 0.44199100},  {15, 0.41848600},  {10, 0.39317300},  {5, 0.36691800},    {0, 0.33974700},
+        {-5, 0.31369300},  {-10, 0.29088400}, {-15, 0.27016500}, {-20, 0.25119000},  {-30, 0.21557400},
+        {-40, 0.18172600}, {-60, 0.11832800}, {-80, 0.05678380}, {-100, 0.00000000},
+    }};
+    static Interpolator const sat_to_rt{{
+        {0.00036138, -100}, {0.02665059, -90}, {0.05398929, -80}, {0.08223383, -70}, {0.11160132, -60},
+        {0.14236492, -50},  {0.17488792, -40}, {0.20968295, -30}, {0.24753367, -20}, {0.28982319, -10},
+        {0.33974700, 0},    {0.38854096, 10},  {0.44163229, 20},  {0.50069355, 30},  {0.56787097, 40},
+        {0.64492921, 50},   {0.73193242, 60},  {0.82738070, 70},  {0.92841901, 80},  {1.02739169, 90},
+        {1.11065176, 100},
+    }};
+
+    return int(std::round(sat_to_rt(lr_to_sat(float(x)))));
 }
 
 void import(metadata_t const& metadata, settings_t& settings) {
@@ -366,8 +418,11 @@ void import(metadata_t const& metadata, settings_t& settings) {
     import_simple<std::string>(metadata, "Xmp.dc.rights", settings, "IPTC", "Copyright");
     import_simple<std::string>(metadata, "Xmp.dc.creator", settings, "IPTC", "Creator");
     import_simple<std::string>(metadata, "Xmp.dc.title", settings, "IPTC", "Title");
-    if (!import_simple<std::vector<std::string>>(metadata, "Xmp.lr.hierarchicalSubject", settings, "IPTC", "Keywords"))
-        import_simple<std::vector<std::string>>(metadata, "Xmp.dc.subject", settings, "IPTC", "Keywords");
+    import_simple<std::vector<std::string>>(metadata,
+                                            std::vector<std::string>{"Xmp.lr.hierarchicalSubject", "Xmp.dc.subject"},
+                                            settings,
+                                            "IPTC",
+                                            "Keywords");
 
     // Labels
     import_simple<int>(metadata, "Xmp.xmp.Rating", settings, "General", "Rank");
@@ -383,6 +438,20 @@ void import(metadata_t const& metadata, settings_t& settings) {
         settings.set("White Balance", "Enabled", true);
         settings.set("White Balance", "Setting", "Custom"s);
     }
+
+    // Exposure
+    import_simple<float>(metadata,
+                         std::vector<std::string>{"Xmp.crs.Exposure2012", "Xmp.crs.Exposure"},
+                         settings,
+                         "Exposure",
+                         "Compensation");
+    import_convert<int, int>(metadata,
+                             std::vector<std::string>{"Xmp.crs.Contrast2012", "Xmp.crs.Contrast"},
+                             &convert_contrast,
+                             settings,
+                             "Exposure",
+                             "Contrast");
+    import_convert<int, int>(metadata, "Xmp.crs.Saturation", &convert_saturation, settings, "Exposure", "Saturation");
 
     // TODO
 }
