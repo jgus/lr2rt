@@ -53,6 +53,19 @@ template <>
 struct get_value_impl<bool> {
     static std::optional<bool> impl(Exiv2::Value const& x) {
         switch (x.typeId()) {
+            case Exiv2::TypeId::unsignedByte:
+            case Exiv2::TypeId::unsignedShort:
+            case Exiv2::TypeId::unsignedLong:
+            case Exiv2::TypeId::signedByte:
+            case Exiv2::TypeId::signedShort:
+            case Exiv2::TypeId::signedLong:
+            case Exiv2::TypeId::unsignedLongLong:
+            case Exiv2::TypeId::signedLongLong:
+            case Exiv2::TypeId::tiffIfd8:
+                return x.toLong();
+
+            case Exiv2::TypeId::asciiString:
+            case Exiv2::TypeId::string:
             case Exiv2::TypeId::xmpText: {
                 auto s = x.toString();
                 if (boost::iequals(s, "true")) return true;
@@ -74,7 +87,27 @@ struct get_value_impl<bool> {
 template <typename T>
 struct get_value_impl<T, std::enable_if_t<std::is_arithmetic_v<T>>> {
     static std::optional<T> impl(Exiv2::Value const& x) {
-        switch (x.typeId()) {
+        auto type_id = x.typeId();
+        switch (type_id) {
+            case Exiv2::TypeId::unsignedByte:
+            case Exiv2::TypeId::unsignedShort:
+            case Exiv2::TypeId::unsignedLong:
+            case Exiv2::TypeId::signedByte:
+            case Exiv2::TypeId::signedShort:
+            case Exiv2::TypeId::signedLong:
+            case Exiv2::TypeId::unsignedLongLong:
+            case Exiv2::TypeId::signedLongLong:
+            case Exiv2::TypeId::tiffIfd8:
+                return x.toLong();
+
+            case Exiv2::TypeId::unsignedRational:
+            case Exiv2::TypeId::signedRational:
+            case Exiv2::TypeId::tiffFloat:
+            case Exiv2::TypeId::tiffDouble:
+                return x.toFloat();
+
+            case Exiv2::TypeId::asciiString:
+            case Exiv2::TypeId::string:
             case Exiv2::TypeId::xmpText: {
                 std::istringstream i{x.toString()};
                 T value;
@@ -91,6 +124,8 @@ template <>
 struct get_value_impl<std::string> {
     static std::optional<std::string> impl(Exiv2::Value const& x) {
         switch (x.typeId()) {
+            case Exiv2::TypeId::asciiString:
+            case Exiv2::TypeId::string:
             case Exiv2::TypeId::xmpText:
                 return x.toString();
             case Exiv2::TypeId::langAlt:
@@ -117,6 +152,8 @@ template <>
 struct get_value_impl<std::vector<std::string>> {
     static std::optional<std::vector<std::string>> impl(Exiv2::Value const& x) {
         switch (x.typeId()) {
+            case Exiv2::TypeId::asciiString:
+            case Exiv2::TypeId::string:
             case Exiv2::TypeId::xmpText:
             case Exiv2::TypeId::xmpAlt:
             case Exiv2::TypeId::xmpBag:
@@ -163,38 +200,47 @@ class metadata_t {
         }
     }
 
-    template <typename T>
-    [[nodiscard]] std::optional<T> get(std::string const& key) const {
-        std::optional<T> result;
-        if (sidecar_) {
-            auto i = sidecar_->xmpData().findKey(Exiv2::XmpKey{key});
-            if (i != sidecar_->xmpData().end()) result = get_value<T>(i->value());
-            if (result) return result;
-        }
-        auto i = image_->xmpData().findKey(Exiv2::XmpKey{key});
-        if (i != image_->xmpData().end()) result = get_value<T>(i->value());
-        return result;
-    }
+    [[nodiscard]] auto width() const { return image_->pixelWidth(); }
+    [[nodiscard]] auto height() const { return image_->pixelHeight(); }
 
     template <typename T>
     [[nodiscard]] std::optional<T> get(std::vector<std::string> const& keys) const {
         std::optional<T> result;
         if (sidecar_) {
             for (auto&& key : keys) {
-                auto i = sidecar_->xmpData().findKey(Exiv2::XmpKey{key});
-                if (i != sidecar_->xmpData().end()) result = get_value<T>(i->value());
-                if (result) return result;
+                if (boost::starts_with(key, "Xmp.")) {
+                    auto i = sidecar_->xmpData().findKey(Exiv2::XmpKey{key});
+                    if (i != sidecar_->xmpData().end()) result = get_value<T>(i->value());
+                    if (result) return result;
+                }
             }
         }
         for (auto&& key : keys) {
-            auto i = image_->xmpData().findKey(Exiv2::XmpKey{key});
-            if (i != image_->xmpData().end()) result = get_value<T>(i->value());
-            if (result) return result;
+            if (boost::starts_with(key, "Xmp.")) {
+                auto i = image_->xmpData().findKey(Exiv2::XmpKey{key});
+                if (i != image_->xmpData().end()) result = get_value<T>(i->value());
+                if (result) return result;
+            } else if (boost::starts_with(key, "Exif.")) {
+                auto i = image_->exifData().findKey(Exiv2::ExifKey{key});
+                if (i != image_->exifData().end()) result = get_value<T>(i->value());
+                if (result) return result;
+            }
         }
         return std::nullopt;
     }
 
+    template <typename T>
+    [[nodiscard]] std::optional<T> get(std::string const& key) const {
+        return get<T>(std::vector{key});
+    }
+
     friend std::ostream& operator<<(std::ostream& s, metadata_t const& m) {
+        s << "WxH: " << m.width() << "x" << m.height() << std::endl;
+        s << "EXIF from file:" << std::endl;
+        for (auto&& datum : m.image_->exifData()) {
+            s << datum.key() << ": " << datum.value().toString() << " ("
+              << Exiv2::TypeInfo::typeName(datum.value().typeId()) << ")" << std::endl;
+        }
         s << "XMP from file:" << std::endl;
         for (auto&& datum : m.image_->xmpData()) {
             s << datum.key() << ": " << datum.value().toString() << " ("
@@ -462,6 +508,138 @@ std::optional<int> convert_shadows(int x) {
     return int(std::round(m_to_rt(lr_to_m(float(x)))));
 }
 
+struct orient_op_t {
+    bool horizontal_flip = false;
+    int rotate = 0;
+
+    static orient_op_t from_tiff(int x) {
+        switch (x) {
+            case 1:  // ORIENTATION_TOPLEFT
+            default:
+                return {false, 0};
+            case 2:  // ORIENTATION_TOPRIGHT
+                return {true, 0};
+            case 3:  // ORIENTATION_BOTRIGHT
+                return {false, 180};
+            case 4:  // ORIENTATION_BOTLEFT
+                return {true, 180};
+            case 5:  // ORIENTATION_LEFTTOP
+                return {true, 90};
+            case 6:  // ORIENTATION_RIGHTTOP
+                return {false, 90};
+            case 7:  // ORIENTATION_RIGHTBOT
+                return {true, 270};
+            case 8:  // ORIENTATION_LEFTBOT
+                return {false, 270};
+        }
+    }
+
+    bool is_portrait() const { return rotate % 180 == 90; }
+
+    [[nodiscard]] orient_op_t append_horizontal_flip(bool x) const {
+        return x ? orient_op_t{!horizontal_flip, (360 - rotate) % 360} : *this;
+    }
+
+    [[nodiscard]] orient_op_t append_rotate(int x) const { return {horizontal_flip, (rotate + x) % 360}; }
+
+    [[nodiscard]] orient_op_t compose(orient_op_t const& b) const {
+        return append_horizontal_flip(b.horizontal_flip).append_rotate(b.rotate);
+    }
+
+    friend orient_op_t operator+(orient_op_t const& a, orient_op_t const& b) { return a.compose(b); }
+
+    [[nodiscard]] orient_op_t invert() const {
+        return orient_op_t{}.append_rotate(360 - rotate).append_horizontal_flip(horizontal_flip);
+    }
+
+    friend orient_op_t operator-(orient_op_t const& x) { return x.invert(); }
+};
+
+std::tuple<float, float> rotate(std::tuple<float, float> p, float r) {
+    return {std::get<0>(p) * std::cos(r) + std::get<1>(p) * std::sin(r),
+            -std::get<0>(p) * std::sin(r) + std::get<1>(p) * std::cos(r)};
+}
+
+void import_crop(metadata_t const& metadata, settings_t& settings) {
+    if (!metadata.get<bool>("Xmp.crs.HasCrop").value_or(false)) return;
+
+    // cap + user = final
+    // -cap + cap + user = -cap + final
+    // user = -cap + final
+    auto final_orientation = orient_op_t::from_tiff(metadata.get<int>("Xmp.tiff.Orientation").value_or(1));
+    auto capture_orientation = orient_op_t::from_tiff(metadata.get<int>("Exif.Image.Orientation").value_or(1));
+    auto user_orient_op = -capture_orientation + final_orientation;
+
+    auto sensor_width = metadata.width();
+    auto sensor_height = metadata.height();
+    auto image_width = metadata.get<int>("Xmp.tiff.ImageWidth").value_or(sensor_width);
+    auto image_height = metadata.get<int>("Xmp.tiff.ImageLength").value_or(sensor_height);
+    if (final_orientation.is_portrait()) {
+        std::swap(sensor_width, sensor_height);
+        std::swap(image_width, image_height);
+    }
+
+    auto top = metadata.get<float>("Xmp.crs.CropTop").value_or(0);
+    auto left = metadata.get<float>("Xmp.crs.CropLeft").value_or(0);
+    auto bottom = metadata.get<float>("Xmp.crs.CropBottom").value_or(1);
+    auto right = metadata.get<float>("Xmp.crs.CropRight").value_or(1);
+    auto angle = metadata.get<float>("Xmp.crs.CropAngle").value_or(0);
+    assert(0 <= top && top <= 1);
+    assert(0 <= left && left <= 1);
+    assert(0 <= bottom && bottom <= 1);
+    assert(0 <= right && right <= 1);
+    assert(-45 <= angle && angle <= 45);
+
+    int corner_swaps = 0;
+    if (final_orientation.horizontal_flip) {
+        auto left_n = 1.0 - right;
+        auto right_n = 1.0 - left;
+        left = left_n;
+        right = right_n;
+        assert(left <= right);
+        ++corner_swaps;
+    }
+    for (auto i = 0; i < final_orientation.rotate / 90; ++i) {
+        auto top_n = left;
+        auto left_n = 1.0 - bottom;
+        auto bottom_n = right;
+        auto right_n = 1.0 - top;
+        top = top_n;
+        left = left_n;
+        bottom = bottom_n;
+        right = right_n;
+        assert(left <= right);
+        assert(top <= bottom);
+        ++corner_swaps;
+    }
+    corner_swaps = corner_swaps % 2;
+
+    auto top_s = (top - 0.5) * sensor_height;
+    auto left_s = (left - 0.5) * sensor_width;
+    auto bottom_s = (bottom - 0.5) * sensor_height;
+    auto right_s = (right - 0.5) * sensor_width;
+    auto angle_r = angle * M_PI / 180;
+    assert(std::cos(angle_r) >= 0);
+    auto [x0, y0] = (corner_swaps == 0) ? rotate({left_s, top_s}, angle_r) : rotate({right_s, top_s}, angle_r);
+    auto [x1, y1] = (corner_swaps == 0) ? rotate({right_s, bottom_s}, angle_r) : rotate({left_s, bottom_s}, angle_r);
+    auto top_r = std::min(y0, y1) + 0.5 * image_height;
+    auto bottom_r = std::max(y0, y1) + 0.5 * image_height;
+    auto left_r = std::min(x0, x1) + 0.5 * image_width;
+    auto right_r = std::max(x0, x1) + 0.5 * image_width;
+
+    settings.set("Coarse Transformation", "Rotate", user_orient_op.rotate);
+    settings.set("Coarse Transformation", "HorizontalFlip", user_orient_op.horizontal_flip);
+    settings.set("Coarse Transformation", "VerticalFlip", false);
+    settings.set("Crop", "Enabled", true);
+    //        settings.set("Crop", "FixedRatio", true);
+    settings.set("Crop", "X", int(round(left_r)));
+    settings.set("Crop", "W", int(round(right_r - left_r)));
+    settings.set("Crop", "Y", int(round(top_r)));
+    settings.set("Crop", "H", int(round(bottom_r - top_r)));
+    settings.set("Common Properties for Transformations", "AutoFill", false);
+    settings.set("Rotation", "Degree", angle);
+}
+
 void import(metadata_t const& metadata, settings_t& settings) {
     // IPTC Metadata
     import_simple<std::string>(metadata, "Xmp.dc.description", settings, "IPTC", "Caption");
@@ -523,6 +701,9 @@ void import(metadata_t const& metadata, settings_t& settings) {
         settings.set("Shadows & Highlights", "Enabled", true);
     }
 
+    // Crop
+    import_crop(metadata, settings);
+
     // TODO
 }
 
@@ -532,7 +713,7 @@ void process_file(boost::filesystem::path const& path) {
     auto metadata = source.load_metadata();
     if (!metadata) return;
     //    if (!metadata->is_lightroom()) return;
-    std::cerr << *metadata;
+    //    std::cerr << *metadata;
     settings_t settings;
     import(*metadata, settings);
     settings.commit(path);
