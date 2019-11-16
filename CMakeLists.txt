@@ -5,9 +5,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ${CMAKE_CXX_STANDARD})
 
 find_program(CONAN_BIN NAMES conan)
-if(NOT CONAN_BIN)
+if (NOT CONAN_BIN)
     message(FATAL_ERROR "Could not find conan, which is required for this build. Please install it (e.g. `pip install conan`)")
-endif()
+endif ()
 execute_process(COMMAND "${CONAN_BIN}" install "${CMAKE_SOURCE_DIR}" --build=missing -s build_type=Release)
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup(TARGETS)
@@ -35,6 +35,20 @@ target_link_libraries(lr2rt PRIVATE
         Exiv2
         )
 target_sources(lr2rt PRIVATE
+        get_value.h
+        import.h
+        import_crop.cc
+        import_crop.h
+        import_development.cc
+        import_development.h
+        import_tags.cc
+        import_tags.h
         interpolate.h
         main.cc
+        metadata.cc
+        metadata.h
+        orient_op.h
+        settings.cc
+        settings.h
+        to_setting.h
         )
