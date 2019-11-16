@@ -11,6 +11,7 @@ class settings_t {
         settings_[category][key] = to_setting_string<T>(value);
     }
 
+    void load(boost::filesystem::path const& image_path);
     void commit(boost::filesystem::path const& image_path) const;
 
    private:

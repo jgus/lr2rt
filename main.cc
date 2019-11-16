@@ -71,6 +71,7 @@ void process_file(boost::filesystem::path const& path) {
     //    if (!metadata->is_lightroom()) return;
     //    std::cerr << *metadata;
     settings_t settings;
+    settings.load(path);
     import(*metadata, settings);
     settings.commit(path);
 }
