@@ -31,10 +31,11 @@ target_compile_options(Exiv2 INTERFACE
 
 add_executable(lr2rt "")
 target_link_libraries(lr2rt PRIVATE
-        CONAN_PKG::boost
+        CONAN_PKG::Boost
         Exiv2
         )
 target_sources(lr2rt PRIVATE
+        exiv2.h
         get_value.h
         import.h
         import_crop.cc
@@ -44,7 +45,7 @@ target_sources(lr2rt PRIVATE
         import_tags.cc
         import_tags.h
         interpolate.h
-        main.cc
+        lr2rt_main.cc
         metadata.cc
         metadata.h
         orient_op.h

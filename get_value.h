@@ -1,11 +1,12 @@
 #pragma once
 
 #include <boost/algorithm/string.hpp>
-#include <exiv2/exiv2.hpp>
 #include <optional>
 #include <string>
 #include <type_traits>
 #include <vector>
+
+#include "exiv2.h"
 
 namespace detail {
 

@@ -1,9 +1,9 @@
 #pragma once
 
 #include <boost/filesystem.hpp>
-#include <exiv2/exiv2.hpp>
 
 #include "get_value.h"
+#include "exiv2.h"
 
 class metadata_t {
    public:
