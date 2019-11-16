@@ -43,6 +43,11 @@ class metadata_t {
         return get<T>(std::vector{key});
     }
 
+    [[nodiscard]] bool is_lightroom() const {
+        auto tool_name = get<std::string>("Xmp.xmp.CreatorTool");
+        return tool_name && (boost::icontains(*tool_name, "lightroom") || boost::icontains(*tool_name, "camera raw"));
+    }
+
     friend std::ostream& operator<<(std::ostream& s, metadata_t const& m) {
         s << "WxH: " << m.width() << "x" << m.height() << std::endl;
         s << "EXIF from file:" << std::endl;

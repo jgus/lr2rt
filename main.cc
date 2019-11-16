@@ -11,6 +11,7 @@
 
 struct options_t {
     std::vector<std::string> inputs;
+    bool force = false;
 };
 
 auto parse_options(int argc, char* const* argv) {
@@ -21,6 +22,7 @@ auto parse_options(int argc, char* const* argv) {
     o.add_options()
     ("help", "show this help message")
     ("input,i", boost::program_options::value(&options.inputs)->required(), "input file or directory")
+    ("force,f", boost::program_options::bool_switch(&options.force), "force processing, even if the file isn't marked as a lightroom file")
     ;
     // clang-format on
     boost::program_options::positional_options_description p;
@@ -63,24 +65,27 @@ void import(metadata_t const& metadata, settings_t& settings) {
     import_crop(metadata, settings);
 }
 
-void process_file(boost::filesystem::path const& path) {
+void process_file(boost::filesystem::path const& path, bool force) {
     source_file_t source{path};
     if (source.is_xmp()) return;
     auto metadata = source.load_metadata();
     if (!metadata) return;
-    //    if (!metadata->is_lightroom()) return;
-    //    std::cerr << *metadata;
+    if (!metadata->is_lightroom() && !force) {
+        std::cerr << path << " does not appear to be a lightroom file; skipping" << std::endl;
+        return;
+    }
+    // std::cerr << *metadata;
     settings_t settings;
     settings.load(path);
     import(*metadata, settings);
-    settings.commit(path);
+    if (!settings.empty()) settings.commit(path);
 }
 
-void process_directory(boost::filesystem::path const& path) {
+void process_directory(boost::filesystem::path const& path, bool force) {
     for (boost::filesystem::recursive_directory_iterator i{path};
          i != boost::filesystem::recursive_directory_iterator{};
          ++i)
-        process_file(*i);
+        process_file(*i, force);
 }
 
 int main(int argc, char* argv[]) {
@@ -89,9 +94,9 @@ int main(int argc, char* argv[]) {
         try {
             auto path = boost::filesystem::canonical(input);
             if (boost::filesystem::is_directory(path))
-                process_directory(path);
+                process_directory(path, options.force);
             else
-                process_file(path);
+                process_file(path, options.force);
         } catch (boost::filesystem::filesystem_error const& e) {
             std::cerr << "Couldn't find " << input << ": " << e.what() << std::endl;
         }
