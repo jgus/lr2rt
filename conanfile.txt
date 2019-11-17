@@ -4,6 +4,9 @@ zlib/1.2.11
 
 # Actual Deps
 #gtest/1.8.1
+libjpeg-turbo/2.0.2
+libtiff/4.0.9
+libpng/1.6.37
 boost/1.71.0
 Exiv2/0.27@piponazo/stable
 

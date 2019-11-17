@@ -35,21 +35,22 @@ target_link_libraries(lr2rt PRIVATE
         Exiv2
         )
 target_sources(lr2rt PRIVATE
-        exiv2.h
-        get_value.h
-        import.h
         import_crop.cc
-        import_crop.h
         import_development.cc
-        import_development.h
         import_tags.cc
-        import_tags.h
-        interpolate.h
         lr2rt_main.cc
         metadata.cc
-        metadata.h
-        orient_op.h
         settings.cc
-        settings.h
-        to_setting.h
+        )
+
+add_executable(match_dev "")
+target_link_libraries(match_dev PRIVATE
+        CONAN_PKG::Boost
+        CONAN_PKG::libjpeg-turbo
+        CONAN_PKG::TIFF
+        CONAN_PKG::libpng
+        )
+target_sources(match_dev PRIVATE
+        match_dev_main.cc
+        settings.cc
         )
