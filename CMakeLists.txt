@@ -29,6 +29,22 @@ target_compile_options(Exiv2 INTERFACE
         -Wno-deprecated-declarations
         )
 
+add_library(CImg INTERFACE)
+target_include_directories(CImg INTERFACE external/CImg)
+target_compile_definitions(CImg INTERFACE cimg_display=0)
+if(TARGET CONAN_PKG::libjpeg-turbo)
+    target_compile_definitions(CImg INTERFACE cimg_use_jpeg=1)
+    target_link_libraries(CImg INTERFACE CONAN_PKG::libjpeg-turbo)
+endif()
+if(TARGET CONAN_PKG::TIFF)
+    target_compile_definitions(CImg INTERFACE cimg_use_tiff=1)
+    target_link_libraries(CImg INTERFACE CONAN_PKG::TIFF)
+endif()
+if(TARGET CONAN_PKG::libpng)
+    target_compile_definitions(CImg INTERFACE cimg_use_png=1)
+    target_link_libraries(CImg INTERFACE CONAN_PKG::libpng)
+endif()
+
 add_executable(lr2rt "")
 target_link_libraries(lr2rt PRIVATE
         CONAN_PKG::Boost
@@ -46,9 +62,7 @@ target_sources(lr2rt PRIVATE
 add_executable(match_dev "")
 target_link_libraries(match_dev PRIVATE
         CONAN_PKG::Boost
-        CONAN_PKG::libjpeg-turbo
-        CONAN_PKG::TIFF
-        CONAN_PKG::libpng
+        CImg
         )
 target_sources(match_dev PRIVATE
         match_dev_main.cc

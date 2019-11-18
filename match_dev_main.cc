@@ -1,8 +1,4 @@
-#include <boost/gil.hpp>
-#include <boost/gil/extension/io/jpeg.hpp>
-#include <boost/gil/extension/io/png.hpp>
-#include <boost/gil/extension/io/tiff.hpp>
-#include <boost/gil/io/io.hpp>
+#include <CImg.h>
 #include <boost/program_options.hpp>
 #include <iostream>
 
@@ -37,57 +33,27 @@ auto parse_options(int argc, char* const* argv) {
     return options;
 }
 
-std::optional<boost::gil::rgb8_image_t> read_image(std::string const& path) {
-    std::ifstream image_stream(path, std::ios::binary);
-    if (!image_stream.is_open()) return std::nullopt;
-    boost::gil::rgb8_image_t image;
-    try {
-        boost::gil::read_image(image_stream, image, boost::gil::image_read_settings<boost::gil::jpeg_tag>{});
-        return image;
-    } catch (std::ios_base::failure const&) {
-    }
-    try {
-        boost::gil::read_image(image_stream, image, boost::gil::image_read_settings<boost::gil::tiff_tag>{});
-        return image;
-    } catch (std::ios_base::failure const&) {
-    }
-    try {
-        boost::gil::read_image(image_stream, image, boost::gil::image_read_settings<boost::gil::png_tag>{});
-        return image;
-    } catch (std::ios_base::failure const&) {
-    }
-    return std::nullopt;
-}
+struct histograms {
+    cimg_library::CImg<float> r;
+    cimg_library::CImg<float> g;
+    cimg_library::CImg<float> b;
+    cimg_library::CImg<float> s;
+    cimg_library::CImg<float> i;
 
-struct histogram_t {
-    std::vector<double> r;
-    std::vector<double> g;
-    std::vector<double> b;
-};
-
-histogram_t get_histogram(boost::gil::rgb8_image_t const& image) {
-    histogram_t result;
-    result.r.resize(256, 0.0);
-    result.g.resize(256, 0.0);
-    result.b.resize(256, 0.0);
-    size_t count = 0;
-    for (auto&& p : boost::gil::const_view(image)) {
-        result.r[p[0]] += 1;
-        result.g[p[1]] += 1;
-        result.b[p[2]] += 1;
-        ++count;
-    }
-    if (count > 0) {
-        for (auto& x : result.r) x *= 256.0 / count;
-        for (auto& x : result.g) x *= 256.0 / count;
-        for (auto& x : result.b) x *= 256.0 / count;
-    }
-    return result;
+    template <typename T>
+    histograms(cimg_library::CImg<T> const& rgb, int level_count) {
+        if (rgb.spectrum() != 3) throw std::runtime_error("Image is not RGB");
+        auto hsi = rgb.get_RGBtoHSI();
+        r = rgb.get_shared_channel(0).get_histogram(level_count);
+        g = rgb.get_shared_channel(1).get_histogram(level_count);
+        b = rgb.get_shared_channel(2).get_histogram(level_count);
+        s = hsi.get_shared_channel(1).get_histogram(level_count);
+        i = hsi.get_shared_channel(2).get_histogram(level_count);
+    };
 };
 
 int main(int argc, char* argv[]) {
     auto options = parse_options(argc, argv);
-    auto image = read_image(options.image_path);
-    if(!image) exit(1);
-    auto histogram = get_histogram(*image);
+    cimg_library::CImg<float> target(options.target_path.c_str());
+    histograms target_histograms(target, 256);
 }
