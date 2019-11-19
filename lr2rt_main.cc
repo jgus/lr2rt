@@ -78,7 +78,7 @@ void process_file(boost::filesystem::path const& path, bool force) {
     settings_t settings;
     settings.load(path);
     import(*metadata, settings);
-    if (!settings.empty()) settings.commit(path);
+    if (!settings.empty()) settings.commit_by(path);
 }
 
 void process_directory(boost::filesystem::path const& path, bool force) {

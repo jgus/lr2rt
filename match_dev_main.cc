@@ -2,12 +2,13 @@
 #include <boost/program_options.hpp>
 #include <iostream>
 
+#include "render.h"
 #include "settings.h"
+#include "temp_directory.h"
 
 struct options_t {
     std::string image_path;
     std::string target_path;
-    std::vector<std::string> candidate_paths;
 };
 
 auto parse_options(int argc, char* const* argv) {
@@ -19,7 +20,6 @@ auto parse_options(int argc, char* const* argv) {
     ("help", "show this help message")
     ("image,i", boost::program_options::value(&options.image_path)->required(), "image file")
     ("target,t", boost::program_options::value(&options.target_path)->required(), "image file with target development")
-    ("candidate,c", boost::program_options::value(&options.candidate_paths), "candidates for testing")
     ;
     // clang-format on
 
@@ -58,20 +58,20 @@ struct histograms {
         i.blur(blur_sigma, false, true);
     };
 
-    double error(histograms const& other, double wr, double wg, double wb, double ws, double wi) const {
+    [[nodiscard]] double error(histograms const& other, double wr, double wg, double wb, double ws, double wi) const {
         return wr * r.MSE(other.r) + wg * g.MSE(other.g) + wb * b.MSE(other.b) + ws * s.MSE(other.s) +
                wi * i.MSE(other.i);
     }
 };
 
 int main(int argc, char* argv[]) {
+    temp_directory temp;
     auto options = parse_options(argc, argv);
     cimg_library::CImg<float> target(options.target_path.c_str());
     histograms target_histograms(target, 256, 16);
-    for (auto&& candidate_path : options.candidate_paths) {
-        cimg_library::CImg<float> candidate(candidate_path.c_str());
-        histograms candidate_histograms(candidate, 256, 16);
-        std::cerr << candidate_path << " : " << target_histograms.error(candidate_histograms, 1, 1, 1, 2, 2)
-                  << std::endl;
-    }
+    settings_t settings;
+    settings.load(options.image_path);
+    auto rendered = render(options.image_path, settings, temp);
+    histograms rendered_histograms(rendered, 256, 16);
+    std::cerr << "Rendered : " << target_histograms.error(rendered_histograms, 1, 1, 1, 2, 2) << std::endl;
 }

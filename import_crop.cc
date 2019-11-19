@@ -45,8 +45,8 @@ void import_crop(metadata_t const& metadata, settings_t& settings) {
 
     int corner_swaps = 0;
     if (final_orientation.horizontal_flip) {
-        auto left_n = 1.0 - right;
-        auto right_n = 1.0 - left;
+        auto left_n = 1.0f - right;
+        auto right_n = 1.0f - left;
         left = left_n;
         right = right_n;
         assert(left <= right);
@@ -54,9 +54,9 @@ void import_crop(metadata_t const& metadata, settings_t& settings) {
     }
     for (auto i = 0; i < final_orientation.rotate / 90; ++i) {
         auto top_n = left;
-        auto left_n = 1.0 - bottom;
+        auto left_n = 1.0f - bottom;
         auto bottom_n = right;
-        auto right_n = 1.0 - top;
+        auto right_n = 1.0f - top;
         top = top_n;
         left = left_n;
         bottom = bottom_n;
@@ -67,11 +67,11 @@ void import_crop(metadata_t const& metadata, settings_t& settings) {
     }
     corner_swaps = corner_swaps % 2;
 
-    auto top_s = (top - 0.5) * sensor_height;
-    auto left_s = (left - 0.5) * sensor_width;
-    auto bottom_s = (bottom - 0.5) * sensor_height;
-    auto right_s = (right - 0.5) * sensor_width;
-    auto angle_r = angle * M_PI / 180;
+    auto top_s = (top - 0.5f) * sensor_height;
+    auto left_s = (left - 0.5f) * sensor_width;
+    auto bottom_s = (bottom - 0.5f) * sensor_height;
+    auto right_s = (right - 0.5f) * sensor_width;
+    float angle_r = angle * M_PI / 180;
     assert(std::cos(angle_r) >= 0);
     auto [x0, y0] = (corner_swaps == 0) ? rotate({left_s, top_s}, angle_r) : rotate({right_s, top_s}, angle_r);
     auto [x1, y1] = (corner_swaps == 0) ? rotate({right_s, bottom_s}, angle_r) : rotate({left_s, bottom_s}, angle_r);

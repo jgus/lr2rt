@@ -38,7 +38,7 @@ std::optional<float> convert_tint(int x) {
         {-0.5092487958, 3.68872},  {-0.541583611, 4.00226},  {-0.5733997287, 4.34245},   {-0.604695869, 4.71156},
         {-0.6354722459, 5.11205},
     }};
-    static float const lnrg_factor = 0.0681933581 - 0.1427758973f;
+    static float const lnrg_factor = 0.0681933581f - 0.1427758973f;
 
     return lnrg_to_rt_tint(lr_tint_to_lnrg(float(x)) + lnrg_factor);
 }

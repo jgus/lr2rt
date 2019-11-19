@@ -31,8 +31,10 @@ void settings_t::load(const boost::filesystem::path& image_path) {
     }
 }
 
-void settings_t::commit(const boost::filesystem::path& image_path) const {
-    boost::filesystem::ofstream o{pp3_path(image_path)};
+void settings_t::commit_by(const boost::filesystem::path& image_path) const { commit(pp3_path(image_path)); }
+
+void settings_t::commit(const boost::filesystem::path& settings_path) const {
+    boost::filesystem::ofstream o{settings_path};
     for (auto&& [category_name, category_contents] : settings_) {
         o << "[" << category_name << "]" << std::endl;
         for (auto&& [key, value] : category_contents) o << key << "=" << value << std::endl;

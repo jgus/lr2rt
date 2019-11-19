@@ -2,8 +2,8 @@
 
 #include <boost/filesystem.hpp>
 
-#include "get_value.h"
 #include "exiv2.h"
+#include "get_value.h"
 
 class metadata_t {
    public:
